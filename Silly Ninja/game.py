@@ -10,14 +10,16 @@ from scripts.clouds import Clouds
 from scripts.visual_effects import Particle, Spark
 from scripts.animation import Animation
 from scripts.utils import load_image, load_images, fade_out
+from scripts.socket.server import GameServer, MAX_CLIENT_COUNT, DISCONNECT_MESSAGE
+from scripts.socket.client import GameClient
 
 
-class Game:
+class GameBase:
 	def __init__(self, clock, screen, outline_display, normal_display):
 		self.clock = clock
 		self.screen = screen
-		self.display = outline_display  # Outline display
-		self.display_2 = normal_display  # Normal display
+		self.outline_display = outline_display  # Outline display
+		self.normal_display = normal_display  # Normal display
 
 		# Assets database for images, audio,...
 		# Values are lists for multiple images.
@@ -37,8 +39,8 @@ class Game:
 			"enemy/idle": Animation(load_images("entities/enemy/idle"), image_duration=6),
 			"enemy/run": Animation(load_images("entities/enemy/run"), image_duration=4),
 			
-			"particle/leaf": Animation(load_images("particles/leaf"), image_duration=20,loop=False),
-			"particle/dust": Animation(load_images("particles/dust"), image_duration=6,loop=False),
+			"particle/leaf": Animation(load_images("particles/leaf"), image_duration=20, loop=False),
+			"particle/dust": Animation(load_images("particles/dust"), image_duration=6, loop=False),
 			
 			"background": load_image("background.png"),
 			"gun": load_image("gun.png"),
@@ -63,13 +65,11 @@ class Game:
 
 		self.tilemap = Tilemap(self, 16)
 
-		self.player = Player(self, (50, 50), (8, 15))
 		self.movement = [False, False]
 
 		self.screenshake = 0
 
-		self.level = 0
-		self.load_level(self.level)
+		self.level_id = 0
 
 
 	def load_level(self, id):
@@ -77,14 +77,6 @@ class Game:
 		self.leaf_spawners = []
 		for tree in self.tilemap.extract([("large_decor", 2)], keep=True):
 			self.leaf_spawners.append(pygame.Rect(tree.pos[0] + 4, tree.pos[1] + 4, 23, 13))
-		
-		self.enemies = []
-		for spawner in self.tilemap.extract([("spawners", 0), ("spawners", 1)]):
-			if spawner.variant == 0:
-				self.player.pos = spawner.pos
-				self.player.air_time = 0
-			else:
-				self.enemies.append(Enemy(self, spawner.pos, (8, 15)))
 
 		self.particles = []
 		self.projectiles = []
@@ -98,10 +90,63 @@ class Game:
 	def run(self):
 		self.sounds["ambience"].play(-1)
 
+
+class GameForHost(GameBase):
+	def __init__(self, clock, screen, outline_display, normal_display, host_ip, port, nickname):
+		super().__init__(clock, screen, outline_display, normal_display)
+		self.players = [Player(nickname, self, (50, 50), (8, 15), id="host")]
+		self.server = GameServer(host_ip, port, on_new_connection=self.on_new_connection)
+
+
+	def on_new_connection(self):
+		pass
+
+
+	def load_level(self, id):
+		super().load_level(id)
+
+
+	def run(self):
+		super().run()
+
+
+class GameForClient(GameBase):
+	def __init__(self, clock, screen, outline_display, normal_display, host_ip, port):
+		super().__init__(clock, screen, outline_display, normal_display)
+
+
+	def load_level(self, id):
+		super().load_level(id)
+
+
+	def run(self):
+		super().run()
+
+
+class GameSolo(GameBase):
+	def __init__(self, clock, screen, outline_display, normal_display):
+		super().__init__(clock, screen, outline_display, normal_display)
+		self.player = Player("", self, (50, 50), (8, 15))
+		self.load_level(self.level_id)
+
+
+	def load_level(self, id):
+		super().load_level(id)
+		self.enemies = []
+		for spawner in self.tilemap.extract([("spawners", 0), ("spawners", 1)]):
+			if spawner.variant == 0:
+				self.player.pos = spawner.pos
+				self.player.air_time = 0
+			else:
+				self.enemies.append(Enemy(self, spawner.pos, (8, 15)))
+
+	def run(self):
+		super().run()
+
 		running = True
 		while running:
-			self.display.fill((0, 0, 0, 0))
-			self.display_2.blit(self.assets["background"], (0, 0))
+			self.outline_display.fill((0, 0, 0, 0))
+			self.normal_display.blit(self.assets["background"], (0, 0))
 
 			self.screenshake = max(self.screenshake - 1, 0)
 
@@ -109,8 +154,8 @@ class Game:
 			if not len(self.enemies):
 				self.transition += 1
 				if self.transition > 30:
-					self.level = min(self.level + 1, len(os.listdir("assets/maps")) - 1)
-					self.load_level(self.level)
+					self.level_id = min(self.level_id + 1, len(os.listdir("assets/maps")) - 1)
+					self.load_level(self.level_id)
 			if self.transition < 0:
 				self.transition += 1
 
@@ -120,11 +165,11 @@ class Game:
 				if self.dead >= 10:
 					self.transition = min(self.transition + 1, 30)
 				if self.dead > 60:
-					self.load_level(self.level)
+					self.load_level(self.level_id)
 
 			# Update the camera scroll.
-			self.camera_scroll[0] += (self.player.rect().centerx - self.display.get_width() / 2 - self.camera_scroll[0]) / 30
-			self.camera_scroll[1] += (self.player.rect().centery - self.display.get_height() / 2 - self.camera_scroll[1]) / 30
+			self.camera_scroll[0] += (self.player.rect().centerx - self.outline_display.get_width() / 2 - self.camera_scroll[0]) / 30
+			self.camera_scroll[1] += (self.player.rect().centery - self.outline_display.get_height() / 2 - self.camera_scroll[1]) / 30
 			render_scroll = (int(self.camera_scroll[0]), int(self.camera_scroll[1]))
 
 			# Spawn leaf particles.
@@ -137,28 +182,28 @@ class Game:
 
 			# Render clouds.
 			self.clouds.update()
-			self.clouds.render(self.display_2, offset=render_scroll)
+			self.clouds.render(self.normal_display, offset=render_scroll)
 
 			# Render the tilemap.
-			self.tilemap.render(self.display, offset=render_scroll)
+			self.tilemap.render(self.outline_display, offset=render_scroll)
 
 			# Render the enemies.
 			for enemy in self.enemies.copy():
 				kill = enemy.update(self.tilemap, movement=(0, 0))
-				enemy.render(self.display, offset=render_scroll)
+				enemy.render(self.outline_display, offset=render_scroll)
 				if kill:
 					self.enemies.remove(enemy)
 
 			# Render the player.
 			if not self.dead:
 				self.player.update(self.tilemap, movement=(self.movement[1] - self.movement[0], 0))
-				self.player.render(self.display, offset=render_scroll)
+				self.player.render(self.outline_display, offset=render_scroll)
 
 			# Render the gun projectiles.
 			for projectile in self.projectiles.copy():
 				# [[x, y], direction, alive_time]
 				projectile.update()
-				projectile.render(self.display, offset=render_scroll)
+				projectile.render(self.outline_display, offset=render_scroll)
 				if self.tilemap.solid_check(projectile.pos):
 					self.projectiles.remove(projectile)
 					for i in range(4):
@@ -183,20 +228,20 @@ class Game:
 			# Render sparks.
 			for spark in self.sparks.copy():
 				kill = spark.update()
-				spark.render(self.display, offset=render_scroll)
+				spark.render(self.outline_display, offset=render_scroll)
 				if kill:
 					self.sparks.remove(spark)
 
 			# Render the outline for sprites.
-			display_mask = pygame.mask.from_surface(self.display)
+			display_mask = pygame.mask.from_surface(self.outline_display)
 			display_silhouette = display_mask.to_surface(setcolor=(0, 0, 0, 180), unsetcolor=(0, 0, 0, 0))
 			for offset in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-				self.display_2.blit(display_silhouette, offset)
+				self.normal_display.blit(display_silhouette, offset)
 
 			# Render particles and remove expired ones.
 			for particle in self.particles.copy():
 				kill = particle.update()
-				particle.render(self.display, offset=render_scroll)
+				particle.render(self.outline_display, offset=render_scroll)
 				if particle.type == "leaf":
 					particle.pos[0] += math.sin(particle.animation.frame * 0.035) * (random.random() * 0.3 + 0.2)
 				if kill:
@@ -210,7 +255,7 @@ class Game:
 				if event.type == pygame.KEYDOWN:
 					if event.key == pygame.K_ESCAPE:
 						running = False
-						fade_out((self.display.get_width(), self.display.get_height()), self.display_2)
+						fade_out((self.normal_display.get_width(), self.normal_display.get_height()), self.normal_display)
 					if event.key == pygame.K_LEFT or event.key == pygame.K_a:
 						self.movement[0] = True
 					if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
@@ -226,16 +271,21 @@ class Game:
 					if event.key == pygame.K_RIGHT or event.key == pygame.K_d:
 						self.movement[1] = False
 
+			# Render the level transition effect.
 			if self.transition:
-				transition_surf = pygame.Surface(self.display.get_size())
-				pygame.draw.circle(transition_surf, (255, 255, 255), (self.display.get_width() // 2, self.display.get_height() // 2), (30 - abs(self.transition)) * 8)
+				transition_surf = pygame.Surface(self.outline_display.get_size())
+				pygame.draw.circle(transition_surf, (255, 255, 255), (self.outline_display.get_width() // 2, self.outline_display.get_height() // 2), (30 - abs(self.transition)) * 8)
 				transition_surf.set_colorkey((255, 255, 255))
-				self.display.blit(transition_surf, (0, 0))
+				self.outline_display.blit(transition_surf, (0, 0))
 
-			self.display_2.blit(self.display, (0, 0))
+			# Blit the outline display on top of the normal one.
+			self.normal_display.blit(self.outline_display, (0, 0))
+			# Render world UI over anything else.
+			self.player.name_text.render(self.normal_display, offset=render_scroll)
 
+			# Finally, scale and blit all of them on the main screen, along with the screenshake effect.
 			screenshake_offset = (random.random() * self.screenshake - self.screenshake / 2, random.random() * self.screenshake - self.screenshake / 2)
-			self.screen.blit(pygame.transform.scale(self.display_2, self.screen.get_size()), screenshake_offset)
+			self.screen.blit(pygame.transform.scale(self.normal_display, self.screen.get_size()), screenshake_offset)
 			
 			pygame.display.update()
 			self.clock.tick(60)

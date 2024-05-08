@@ -3,9 +3,11 @@ import random
 import pygame
 
 from scripts.visual_effects import Particle, Projectile, Spark
+from scripts.ui.ui_elements import Text
 
 class PhysicsEntity:
-	def __init__(self, game, entity_type, pos, size):
+	def __init__(self, game, entity_type, pos, size, id=""):
+		self.id = id
 		self.game = game
 		self.type = entity_type
 		self.pos = list(pos)
@@ -86,9 +88,8 @@ class PhysicsEntity:
 
 
 class Enemy(PhysicsEntity):
-	def __init__(self, game, pos, size):
-		super().__init__(game, "enemy", pos, size)
-
+	def __init__(self, game, pos, size, id=""):
+		super().__init__(game, "enemy", pos, size, id)
 		self.walking = 0
 
 
@@ -166,16 +167,21 @@ class Enemy(PhysicsEntity):
 
 
 class Player(PhysicsEntity):
-	def __init__(self, game, pos, size):
-		super().__init__(game, "player", pos, size)
+	def __init__(self, player_name, game, pos, size, id=""):
+		super().__init__(game, "player", pos, size, id)
 		self.air_time = 0
 		self.jumps = 1
 		self.dashing = 0
 		self.wall_slide = False
 
+		self.name_text = Text(player_name, "gamer", self.pos, size=10, color=(255, 255, 255))
+		self.text_offset = (4, -12)
+
 
 	def update(self, tilemap, movement=(0, 0)):
 		super().update(tilemap, movement=movement)
+
+		self.name_text.update_pos((self.pos[0] + self.text_offset[0], self.pos[1] + self.text_offset[1]))
 
 		# Handle air time and reset when grounded.
 		self.air_time += 1
@@ -239,9 +245,9 @@ class Player(PhysicsEntity):
 			self.set_action("idle")
 
 
-	def render(self, surface, offset=(0, 0)):
+	def render(self, outline_surface, offset=(0, 0)):
 		if abs(self.dashing) <= 50:
-			super().render(surface, offset=offset)
+			super().render(outline_surface, offset=offset)
 
 
 	def jump(self):

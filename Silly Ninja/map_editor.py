@@ -82,12 +82,12 @@ class EditorMenu(MenuBase):
 			
 			self.editor.load(MAP_ID, self.error_text)
 			self.editor.run()
-			self.error_text.text = ""
+			self.error_text.set_text("")
 		
 		except ValueError:
-			self.error_text.text = "Map ID must be an Integer"
+			self.error_text.set_text("Map ID must be an Integer")
 		except Exception as e:
-			self.error_text.text = str(e)
+			self.error_text.set_text(str(e))
 
 
 	def delete_map(self):
@@ -98,14 +98,14 @@ class EditorMenu(MenuBase):
 			
 			if os.path.exists(MAP_PATH):
 				os.remove(MAP_PATH)
-				self.error_text.text = f"DELETED map at \"{MAP_PATH}\"."
+				self.error_text.set_text(f"DELETED map at \"{MAP_PATH}\".")
 			else:
-				self.error_text.text = f"Map with ID {MAP_ID} doesn't exist."
+				self.error_text.set_text(f"Map with ID {MAP_ID} doesn't exist.")
 		
 		except ValueError:
-			self.error_text.text = "Map ID must be an Integer."
+			self.error_text.set_text("Map ID must be an Integer.")
 		except Exception as e:
-			self.error_text.text = str(e)
+			self.error_text.set_text(str(e))
 
 
 	def handle_events(self, event):
@@ -150,7 +150,7 @@ class MapEditor:
 		try:
 			self.tilemap.load(MAP_PATH)
 		except FileNotFoundError:
-			error_text.text = "LOAD FAILED! Map file was not found. Creating an empty map file..."
+			error_text.set_text("LOAD FAILED! Map file was not found. Creating an empty map file...")
 			time.sleep(2)
 			self.create_empty_map(id)
 

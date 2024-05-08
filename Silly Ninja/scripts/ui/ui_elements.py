@@ -14,11 +14,10 @@ DODGER_BLUE_4 = pygame.Color("dodgerblue4")
 
 class UIBase:
 	def __init__(self, pos, size):
-		self.x = pos[0]
-		self.y = pos[1]
+		self.pos = tuple(pos)
 		self._width = size[0]
 		self.height = size[1]
-		self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
+		self.rect = pygame.Rect(pos, size)
 
 	@property
 	def width(self):
@@ -30,7 +29,7 @@ class UIBase:
 		self.rect.w = value
 
 	def get_pos(self):
-		return (self.x, self.y)
+		return tuple(self.pos)
 
 	def get_size(self):
 		return (self.width, self.height)
@@ -39,15 +38,15 @@ class UIBase:
 		return self.rect
 
 	@staticmethod
-	def draw_text(text_obj, x, y, surface, alpha=255):
+	def draw_text(text_obj, pos, surface, alpha=255):
 		text_obj.set_alpha(alpha)
 		text_rect = text_obj.get_rect()  # Get the font's Rect object.
-		text_rect.midtop = (x, y)  # Bind the rect position to top center.
+		text_rect.midtop = pos  # Bind the rect position to top center.
 		surface.blit(text_obj, text_rect)  # Blit it on the screen.
 
 	@staticmethod
-	def draw_rect(rect, draw_surface, x, y, color=BLACK, line_width=0):
-		rect.midtop = (x, y)
+	def draw_rect(rect, draw_surface, pos, color=BLACK, line_width=0):
+		rect.midtop = pos
 		pygame.draw.rect(draw_surface, color, rect, line_width)
 
 
@@ -59,13 +58,14 @@ class Border(UIBase):
 
 
 	def render(self, surface):
-		UIBase.draw_rect(self.rect, surface, self.x, self.y, color=self.color, line_width=self.line_width)
+		UIBase.draw_rect(self.rect, surface, self.pos, color=self.color, line_width=self.line_width)
 
 
 class Text(UIBase):
-	def __init__(self, text, font_name, pos, size=20, color=BLACK, bold=False):
+	def __init__(self, text, font_name, pos, size=20, color=BLACK, bold=False, antialiased=False):
+		self.antialiased = antialiased
 		self.font = pygame.font.SysFont(font_name, size, bold)
-		self.text_obj = self.font.render(text, False, color)
+		self.text_obj = self.font.render(text, self.antialiased, color)
 		super().__init__(pos, self.text_obj.get_size())
 
 		self.text = text
@@ -74,11 +74,20 @@ class Text(UIBase):
 		self.bold = bold
 
 
-	def render(self, surface, override_color=None, alpha=255):
+	def update_pos(self, new_pos):
+		self.pos = tuple(new_pos)
+
+
+	def render(self, surface, override_color=None, alpha=255, offset=(0, 0)):
 		text_color = self.color if override_color is None else override_color
-		self.text_obj = self.font.render(self.text, False, text_color)
+		self.text_obj = self.font.render(self.text, self.antialiased, text_color)
 		self.width = self.text_obj.get_width()
-		UIBase.draw_text(self.text_obj, self.x, self.y, surface, alpha=alpha)
+
+		UIBase.draw_text(self.text_obj, (int(self.pos[0] - offset[0]), int(self.pos[1] - offset[1])), surface, alpha=alpha)
+
+
+	def set_text(self, text):
+		self.text = str(text)
 
 
 	def __repr__(self):
@@ -86,8 +95,8 @@ class Text(UIBase):
 
 
 class BorderedText(Text):
-	def __init__(self, text, font_name, pos, size=20, text_color=BLACK, bold=False, border_color=BLACK, line_width=5):
-		super().__init__(text, font_name, pos, size=size, color=text_color, bold=bold)
+	def __init__(self, text, font_name, pos, size=20, text_color=BLACK, bold=False, antialiased=False, border_color=BLACK, line_width=5):
+		super().__init__(text, font_name, pos, size=size, color=text_color, bold=bold, antialiased=antialiased)
 		self.border = Border(pos, (self.width + 20, self.height), color=border_color, line_width=line_width)
 
 
@@ -132,7 +141,7 @@ class Button(UIBase):
 
 
 	def render(self, surface):
-		UIBase.draw_rect(self.rect, surface, self.x, self.y, color=self.rect_color)
+		UIBase.draw_rect(self.rect, surface, self.pos, color=self.rect_color)
 		self.display_text.render(surface, override_color=self.text_color)
 
 
@@ -181,7 +190,7 @@ class InputField(UIBase):
 
 	def render(self, surface):
 		alpha = 80 if self.display_text.text == self.placeholder_text else 255
-		UIBase.draw_rect(self.rect, surface, self.x, self.y, color=self.color)
+		UIBase.draw_rect(self.rect, surface, self.pos, color=self.color)
 		self.display_text.render(surface, alpha=alpha)
 
 
@@ -189,5 +198,9 @@ class InputField(UIBase):
 		return self.display_text.text
 
 
+	def set_text(self, text):
+		self.display_text.set_text(text)
+
+
 	def clear_text(self):
-		self.display_text.text = self.placeholder_text
+		self.display_text.set_text(self.placeholder_text)
