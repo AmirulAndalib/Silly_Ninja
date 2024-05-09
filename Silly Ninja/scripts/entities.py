@@ -6,10 +6,11 @@ from scripts.visual_effects import Particle, Projectile, Spark
 from scripts.ui.ui_elements import Text
 
 class PhysicsEntity:
-	def __init__(self, game, entity_type, pos, size, id=""):
+	def __init__(self, game, entity_type, pos, size, id="", client_id="solo"):
 		self.id = id
 		self.game = game
 		self.type = entity_type
+		self.client_id = client_id
 		self.pos = list(pos)
 		self.size = size
 		self.velocity = [0, 0]
@@ -88,12 +89,12 @@ class PhysicsEntity:
 
 
 class Enemy(PhysicsEntity):
-	def __init__(self, game, pos, size, id=""):
-		super().__init__(game, "enemy", pos, size, id)
+	def __init__(self, game, pos, size, id="", client_id="solo"):
+		super().__init__(game, "enemy", pos, size, id=id, client_id=client_id)
 		self.walking = 0
 
 
-	def update(self, tilemap, movement=(0, 0)):
+	def update(self, tilemap, movement=(0, 0), walking=0):
 		if self.walking:
 			# Check for flipping against ground and wall tiles in front of the moving direction.
 			if tilemap.solid_check((self.rect().centerx + (-7 if self.facing_left else 7), self.pos[1] + 23)):
@@ -122,8 +123,8 @@ class Enemy(PhysicsEntity):
 						for i in range(4):
 							self.game.sparks.append(Spark(bullet.pos, random.random() - 0.5, random.random() + 2))
 		
-		# Randomize movement.
-		elif random.random() < 0.01:
+		# Randomize movement, only for the solo and host clients.
+		elif random.random() < 0.01 and "client" not in self.client_id:
 			self.walking = random.randint(30, 120)
 			if random.randint(1, 5) == 1:
 				self.facing_left = not self.facing_left
@@ -167,8 +168,8 @@ class Enemy(PhysicsEntity):
 
 
 class Player(PhysicsEntity):
-	def __init__(self, player_name, game, pos, size, id=""):
-		super().__init__(game, "player", pos, size, id)
+	def __init__(self, player_name, game, pos, size, id="", client_id="solo"):
+		super().__init__(game, "player", pos, size, id=id, client_id=client_id)
 		self.air_time = 0
 		self.jumps = 1
 		self.dashing = 0

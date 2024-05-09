@@ -23,6 +23,10 @@ class SocketServer:
 		self.nicknames = []
 
 
+	def active_count(self):
+		return len(self.clients)
+
+
 	def get_public_ip(self):
 		try:
 			response = requests.get("https://httpbin.org/ip")
@@ -157,8 +161,12 @@ class GameServer(SocketServer):
 					self.nicknames.append(nickname)
 					self.clients[id] = client
 
-					print(f"[JOINING]: {address} joined the chat as {nickname}.")
-					self.broadcast(f"[JOINING]: {nickname} joined the chat!")
+					print(f"[JOINING]: {address} joined the game as {nickname}.")
+					self.broadcast(f"[JOINING]: {nickname} joined the game!")
+					
+					if self.on_new_connection is not None:
+						self.on_new_connection(id, nickname)
+
 					threading.Thread(target=self.handle_client, args=(client, address)).start()
 				else:
 					client.send(("[JOIN FAILED]: Connected successfully but the maximum number of clients has been reached. " +

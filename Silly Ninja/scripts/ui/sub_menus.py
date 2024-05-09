@@ -148,7 +148,7 @@ class HostMenu(MenuBase):
 			self.error_text.set_text("")
 			try:
 				print(ip, int(port), nickname)
-				GameForHost(MenuBase.clock, MenuBase.screen, MenuBase.outline_display, MenuBase.normal_display, ip, port).run()
+				GameForHost(MenuBase.clock, MenuBase.screen, MenuBase.outline_display, MenuBase.normal_display, ip, int(port), nickname).run()
 			except Exception:
 				print("IP or port was invalid! Try again.")
 		else:
@@ -252,7 +252,7 @@ class JoinMenu(MenuBase):
 			self.error_text.set_text("")
 			try:
 				print(ip, int(port), nickname)
-				GameForClient(MenuBase.clock, MenuBase.screen, MenuBase.outline_display, MenuBase.normal_display, ip, port).run()
+				GameForClient(MenuBase.clock, MenuBase.screen, MenuBase.outline_display, MenuBase.normal_display, ip, int(port), nickname).run()
 			except Exception:
 				print("IP or port was invalid! Try again.")
 		else:

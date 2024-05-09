@@ -3,6 +3,7 @@ import random
 import sys
 import os
 import math
+import time
 
 from scripts.tilemap import Tilemap
 from scripts.entities import Player, Enemy
@@ -94,12 +95,21 @@ class GameBase:
 class GameForHost(GameBase):
 	def __init__(self, clock, screen, outline_display, normal_display, host_ip, port, nickname):
 		super().__init__(clock, screen, outline_display, normal_display)
-		self.players = [Player(nickname, self, (50, 50), (8, 15), id="host")]
 		self.server = GameServer(host_ip, port, on_new_connection=self.on_new_connection)
+		self.entities = [
+			Player(nickname, self, (50, 50), (8, 15), id="main_player", client_id="host"),
+		]
+
+		self.client = GameClient(self.entities, self.tilemap, "host", ip=host_ip, port=port, nickname=nickname)
+		
+		self.server.start_server()
+		time.sleep(5)
+		self.client.start()
 
 
-	def on_new_connection(self):
-		pass
+
+	def on_new_connection(self, client_id, nickname):
+		self.entities.append(Player(nickname, self, (50, 50), (8, 15), id=f"other_player_{self.server.active_count()}"))
 
 
 	def load_level(self, id):
@@ -111,7 +121,7 @@ class GameForHost(GameBase):
 
 
 class GameForClient(GameBase):
-	def __init__(self, clock, screen, outline_display, normal_display, host_ip, port):
+	def __init__(self, clock, screen, outline_display, normal_display, host_ip, port, nickname):
 		super().__init__(clock, screen, outline_display, normal_display)
 
 
