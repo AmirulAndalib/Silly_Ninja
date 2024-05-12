@@ -5,13 +5,15 @@ import re
 
 from scripts.game import GameForHost, GameForClient
 from scripts.utils import load_image
-from scripts.ui.ui_elements import Text, Button, InputField
+from scripts.ui.ui_elements import Text, Button, InputField, Border
 from scripts.socket.server import GameServer
 from scripts.socket.client import MAX_CLIENT_COUNT
 
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+AZURE4 = pygame.Color("azure4")
+DARK_SLATE_GRAY = pygame.Color("darkslategray")
 
 WIDTH, HEIGHT = 640, 480
 CENTER = WIDTH / 2
@@ -76,8 +78,8 @@ class HostMenu(MenuBase):
 		self.server = None
 
 		# UI elements.
-		self.title = Text("HOST GAME", "retro gaming", (CENTER, 30), size=70, bold=True)
-		self.sub_title = Text("----- Local Area Network (LAN) Only -----", "retro gaming", (CENTER, 110), size=16)
+		self.title = Text("HOST GAME", "retro gaming", (CENTER, 10), size=70, bold=True)
+		self.sub_title = Text("----- Local Area Network (LAN) Only -----", "retro gaming", (CENTER, 90), size=16)
 
 		self.default_ip_text = Text(f"Your default local IP: {self.default_ip}", "retro gaming", (CENTER, 140), size=12)
 		self.server_ip_field = InputField("gamer", (CENTER, 160), (400, 50), placeholder_text="Enter Local Host IP...")
@@ -187,8 +189,8 @@ class JoinMenu(MenuBase):
 		self.default_port = 5050
 
 		# UI elements.
-		self.title = Text("JOIN GAME", "retro gaming", (CENTER, 30), size=70, bold=True)
-		self.sub_title = Text("----- Local Area Network (LAN) Only -----", "retro gaming", (CENTER, 110), size=16)
+		self.title = Text("JOIN GAME", "retro gaming", (CENTER, 10), size=70, bold=True)
+		self.sub_title = Text("----- Local Area Network (LAN) Only -----", "retro gaming", (CENTER, 90), size=16)
 
 		self.default_ip_text = Text("Ask the server's host for their local IP", "retro gaming", (CENTER, 140), size=12)
 		self.server_ip_field = InputField("gamer", (CENTER, 160), (400, 50), placeholder_text="Enter Server IP...")
@@ -295,30 +297,41 @@ class Lobby(MenuBase):
 		self.server = server
 		self.game_instance = game_instance
 		self.is_host = is_host
+		self.previous_client_count = 0
 
 		Lobby.connected_game_clients.append(self.game_instance)
 
 		# UI Elements.
-		self.title = Text("LOBBY", "retro gaming", (CENTER, 30), size=70, bold=True)
-		self.sub_title = Text("----- Current Players: 1/4 -----", "retro gaming", (CENTER, 110), size=16)
+		self.title = Text("LOBBY", "retro gaming", (CENTER, 10), size=70, bold=True)
+		self.sub_title = Text("----- Current Players: 1/4 -----", "retro gaming", (CENTER, 90), size=16)
+
+		self.borders = [
+			Border((CENTER, 125), (400, 55), color=AZURE4, line_width=2),
+			Border((CENTER, 185), (400, 55), color=AZURE4, line_width=2),
+			Border((CENTER, 245), (400, 55), color=AZURE4, line_width=2),
+			Border((CENTER, 305), (400, 55), color=AZURE4, line_width=2)
+		]
 
 		self.player_names = [
-			Text("Empty Slot", "retro gaming", (CENTER, 130), size=20, bold=True),
-			Text("Empty Slot", "retro gaming", (CENTER, 190), size=20, bold=True),
-			Text("Empty Slot", "retro gaming", (CENTER, 250), size=20, bold=True),
-			Text("Empty Slot", "retro gaming", (CENTER, 310), size=20, bold=True)
+			Text("EMPTY SLOT", "gamer", (CENTER, 120), size=50, color=DARK_SLATE_GRAY),
+			Text("EMPTY SLOT", "gamer", (CENTER, 180), size=50, color=DARK_SLATE_GRAY),
+			Text("EMPTY SLOT", "gamer", (CENTER, 240), size=50, color=DARK_SLATE_GRAY),
+			Text("EMPTY SLOT", "gamer", (CENTER, 300), size=50, color=DARK_SLATE_GRAY)
 		]
 
 		self.player_status = [
-			Text("---Disconnected---", "retro gaming", (CENTER, 160), size=15, bold=True),
-			Text("---Disconnected---", "retro gaming", (CENTER, 210), size=15, bold=True),
-			Text("---Disconnected---", "retro gaming", (CENTER, 280), size=15, bold=True),
-			Text("---Disconnected---", "retro gaming", (CENTER, 340), size=15, bold=True)
+			Text("--- Disconnected ---", "retro gaming", (CENTER, 160), size=14, color=DARK_SLATE_GRAY),
+			Text("--- Disconnected ---", "retro gaming", (CENTER, 220), size=14, color=DARK_SLATE_GRAY),
+			Text("--- Disconnected ---", "retro gaming", (CENTER, 280), size=14, color=DARK_SLATE_GRAY),
+			Text("--- Disconnected ---", "retro gaming", (CENTER, 340), size=14, color=DARK_SLATE_GRAY)
 		]
+
+		self.status_text = Text("Something", "retro gaming", (CENTER, 365), size=13, color=pygame.Color("crimson"))
 
 		if self.is_host:
 			self.back_button = Button("Back", "gamer", (220, 390), (150, 60), on_click=self.back_out)
-			self.launch_button = Button("Launch", "gamer", (420, 390), (150, 60), on_click=None)
+			self.launch_button = Button("Launch", "gamer", (420, 390), (150, 60),
+								on_click=game_instance.launch_session, args=(self.status_text, Lobby.connected_game_clients))
 		else:
 			self.back_button = Button("Back", "gamer", (CENTER, 390), (150, 60), on_click=self.back_out)
 
@@ -330,11 +343,33 @@ class Lobby(MenuBase):
 			MenuBase.screen.blit(self.background, (0, 0))
 
 			mx, my = pygame.mouse.get_pos()
+			current_players = len(Lobby.connected_game_clients)
+
+			# Update player slots when new connections arrive
+			if self.previous_client_count != current_players:
+				self.previous_client_count = current_players
+				for i in range(MAX_CLIENT_COUNT):
+					if i < current_players:
+						client = Lobby.connected_game_clients[i]
+						self.player_names[i].set_text(client.get_player_name().upper())
+						self.player_status[i].set_text("--- Connected ---" if client.connected else "--- Disconnected ---")
+					else:
+						self.player_names[i].set_text("EMPTY SLOT")
+						self.player_status[i].set_text("--- Disconnected ---")
 
 			# Render title.
 			self.title.render(MenuBase.screen)
-			self.sub_title.set_text(f"----- Current Players: {len(Lobby.connected_game_clients)}/{MAX_CLIENT_COUNT} -----")
+			self.sub_title.set_text(f"----- Current Players: {current_players}/{MAX_CLIENT_COUNT} -----")
 			self.sub_title.render(MenuBase.screen)
+
+			# Render player slots.
+			for i in range(MAX_CLIENT_COUNT):
+				self.borders[i].render(MenuBase.screen)
+				self.player_names[i].render(MenuBase.screen)
+				self.player_status[i].render(MenuBase.screen)
+
+			# Render the status text.
+			self.status_text.render(MenuBase.screen)
 
 			# Render the launch button, only for the host lobby.
 			if self.is_host:
@@ -344,6 +379,17 @@ class Lobby(MenuBase):
 			# Render the back button.
 			self.fade_alpha = self.back_button.update(MenuBase.screen, self.fade_alpha, mx, my, self.click)
 			self.back_button.render(MenuBase.screen)
+
+			# Handle the fade int effect.
+			self.handle_fade_in(MenuBase.screen)
+
+			# Handle events.
+			self.click = False
+			for event in pygame.event.get():
+				self.handle_events(event)
+
+			pygame.display.update()
+			MenuBase.clock.tick(60)
 
 
 	def back_out(self):

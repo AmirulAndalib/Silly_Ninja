@@ -177,7 +177,12 @@ class GameForHost(GameBase):
 
 		self.player_index = -1
 		self.client = GameClient(self.entities, self.tilemap, "host", ip=host_ip, port=port, nickname=nickname, on_connected=self.on_connected)
+		self.connected = False
 		self.spawn_pos = [0, 0]
+
+
+	def get_player_name(self):
+		return self.client.nickname
 
 
 	def get_main_player(self):
@@ -188,11 +193,39 @@ class GameForHost(GameBase):
 		self.get_main_player().pos = self.spawn_pos
 
 
+	def start_server(self, status_text, on_server_started=None):
+		self.server.start_server()
+		status_text.set_text("[STARTING]: Initializing LAN server...")
+		time.sleep(5)
+		if self.server.running and on_server_started is not None:
+			status_text.set_text("[CREATING]: Server started, creating lobby...")
+			if self.client.start() and on_server_started is not None:
+				time.sleep(2)
+				on_server_started()
+			else:
+				status_text.set_text("[ERROR]: Failed to make connection, check IP and port.")
+		else:
+			status_text.set_text("[TIMED OUT]: Server failed to start, check IP and port.")
+
+
+	def shutdown_server(self):
+		self.connected = False
+		self.server.shutdown()
+
+
+	def launch_session(self, status_text, connected_game_clients):
+		status_text.set_text("[LAUNCHING]: Starting game session...")
+		time.sleep(3)
+		for client in connected_game_clients:
+			client.load_level(LEVEL_ID)
+
+
 	def on_connected(self, client_id, nickname, player_index):
 		# Initialize the main player if the connection is made.
 		self.player_index = player_index
 		self.get_main_player().initialize_client(nickname, client_id=client_id, id="main_player")
-
+		self.connected = True
+	
 
 	def load_level(self, id):
 		super().load_level(id)
@@ -207,28 +240,6 @@ class GameForHost(GameBase):
 			else:
 				self.entities.append(Enemy(self, spawner.pos, (8, 15), id=f"enemy_{enemy_count}", client_id=self.client.client_id))
 				enemy_count += 1
-
-
-	def start_server(self, status_text, on_server_started=None):
-		self.server.start_server()
-		status_text.set_text("Starting LAN server...")
-		time.sleep(5)
-		if self.server.running and on_server_started is not None:
-			status_text.set_text("Server started, creating lobby...")
-			if self.client.start() and on_server_started is not None:
-				time.sleep(2)
-				on_server_started()
-			else:
-				status_text.set_text("[ERROR]: Failed to make connection, check IP and port.")
-		else:
-			status_text.set_text("[TIMED OUT]: Server failed to start, check IP and port.")
-
-
-	def launch_session(self, status_text, connected_game_clients):
-		status_text.set_text("Launching session...")
-		time.sleep(3)
-		for client in connected_game_clients:
-			client.load_level(LEVEL_ID)
 
 
 	def run(self):
@@ -312,12 +323,12 @@ class GameForHost(GameBase):
 			# Events handling.
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
-					self.server.shutdown()
+					self.shutdown_server()
 					pygame.quit()
 					sys.exit()
 				if event.type == pygame.KEYDOWN:
 					if event.key == pygame.K_ESCAPE:
-						self.server.shutdown()
+						self.shutdown_server()
 						running = False
 						fade_out((self.normal_display.get_width(), self.normal_display.get_height()), self.normal_display)
 					if event.key == pygame.K_LEFT or event.key == pygame.K_a:
@@ -363,7 +374,12 @@ class GameForClient(GameBase):
 
 		self.player_index = -1
 		self.client = GameClient(self.entities, self.tilemap, f"client_{CLIENT_ORDER}", ip=host_ip, port=port, nickname=nickname, on_connected=self.on_connected)
+		self.connected = False
 		self.spawn_pos = [0, 0]
+
+
+	def get_player_name(self):
+		return self.client.nickname
 
 
 	def get_main_player(self):
@@ -374,7 +390,18 @@ class GameForClient(GameBase):
 		self.get_main_player().pos = self.spawn_pos
 
 
+	def try_connecting(self, status_text, on_connected=None):
+		status_text.set_text("[CONNECTING]: Attempting to connect to server...")
+		if self.client.start() and on_connected is not None:
+			status_text.set_text("[JOINING]: Connected, joining lobby...")
+			time.sleep(2)
+			on_connected()
+		else:
+			status_text.set_text("[ERROR]: Failed to make connection, check IP and port.")
+
+
 	def disconnect_from_server(self):
+		self.connected = False
 		self.client.disconnect()
 
 
@@ -382,6 +409,7 @@ class GameForClient(GameBase):
 		# Initialize the main player if the connection is made.
 		self.player_index = player_index
 		self.get_main_player().initialize_client(nickname, client_id=client_id, id="main_player")
+		self.connected = True
 
 
 	def load_level(self, id):

@@ -107,9 +107,10 @@ class BorderedText(Text):
 
 
 class Button(UIBase):
-	def __init__(self, display_text, font_name, pos, size, on_click=None, text_offset=0):
+	def __init__(self, display_text, font_name, pos, size, on_click=None, args=(), text_offset=0):
 		super().__init__(pos, size)
 		self.on_click = on_click
+		self.args = tuple(args)
 
 		self.text_color = WHITE
 		self.rect_color = STEEL_BLUE_4
@@ -131,7 +132,7 @@ class Button(UIBase):
 			if click and self.on_click is not None:
 				fade_out((surface.get_width(), surface.get_height()), surface, color=BLACK)
 				self.reset_state()
-				self.on_click()
+				self.on_click(*self.args)
 				fade_alpha = 255
 		
 		elif self.rect.w != self.width:

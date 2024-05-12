@@ -30,4 +30,4 @@ def fade_out(WINDOW_SIZE, draw_surface, color=(255, 255, 255)):
 
 
 if __name__ == '__main__':
-	pass
+	print("a".upper())
