@@ -27,3 +27,7 @@ def fade_out(WINDOW_SIZE, draw_surface, color=(255, 255, 255)):
 		draw_surface.blit(fade_out, (0, 0))
 		pygame.display.update()
 		pygame.time.delay(4)  # Each loop time has 4ms delay.
+
+
+if __name__ == '__main__':
+	pass

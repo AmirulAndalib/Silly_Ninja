@@ -1,6 +1,6 @@
 import pygame
 
-from game import GameSolo
+from scripts.game import GameSolo
 from scripts.ui.ui_elements import Button, Text, BorderedText
 from scripts.ui.sub_menus import MenuBase, HostMenu, JoinMenu
 

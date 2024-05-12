@@ -21,7 +21,6 @@ class PhysicsEntity:
 		self.action = ""
 		self.anim_offset = (-3, -3)
 		self.facing_left = False
-		self.set_action("idle")
 
 
 	def rect(self):
@@ -29,9 +28,9 @@ class PhysicsEntity:
 
 
 	def set_action(self, action):
-		if action != self.action:
+		if self.action != action:
 			self.action = action
-			self.animation = self.game.assets["{0}/{1}".format(self.type, self.action)].copy()
+			self.animation = self.game.assets[f"{self.type}/{self.action}"].copy()
 
 
 	def update(self, tilemap, movement=(0, 0)):
@@ -92,6 +91,8 @@ class Enemy(PhysicsEntity):
 	def __init__(self, game, pos, size, id="", client_id="solo"):
 		super().__init__(game, "enemy", pos, size, id=id, client_id=client_id)
 		self.walking = 0
+		self.is_death = False
+		self.set_action("idle")
 
 
 	def update(self, tilemap, movement=(0, 0), walking=0):
@@ -108,7 +109,7 @@ class Enemy(PhysicsEntity):
 			# Fires projectiles at the player.
 			self.walking = max(self.walking - 1, 0)
 			if not self.walking:
-				dist = (self.game.player.pos[0] - self.pos[0], self.game.player.pos[1] - self.pos[1])
+				dist = (self.game.get_main_player().pos[0] - self.pos[0], self.game.get_main_player().pos[1] - self.pos[1])
 				if abs(dist[1]) < 16:
 					if self.facing_left and dist[0] < 0:
 						bullet = Projectile(self.game, (self.rect().centerx - 7, self.rect().centery), -1.5, alive_time=0)
@@ -138,8 +139,8 @@ class Enemy(PhysicsEntity):
 			self.set_action("idle")
 
 		# Dies if takes damage from the player's dash.
-		if abs(self.game.player.dashing) >= 50:
-			if self.rect().colliderect(self.game.player.rect()):
+		if abs(self.game.get_main_player().dashing) >= 50:
+			if self.rect().colliderect(self.game.get_main_player().rect()):
 				self.game.screenshake = max(self.game.screenshake, 16)
 				self.game.sounds["hit"].play()
 				for i in range(20, 31):
@@ -151,7 +152,9 @@ class Enemy(PhysicsEntity):
 					self.game.particles.append(Particle(self.game, "dust", self.rect().center, velocity=velocity, start_frame=random.randint(0, 7)))
 				self.game.sparks.append(Spark(self.rect().center, 0, random.random() + 5))
 				self.game.sparks.append(Spark(self.rect().center, math.pi, random.random() + 5))
-				return True
+				self.is_death = True
+
+		return self.is_death
 
 
 	def render(self, surface, offset=(0, 0)):
@@ -175,8 +178,30 @@ class Player(PhysicsEntity):
 		self.dashing = 0
 		self.wall_slide = False
 
-		self.name_text = Text(player_name, "gamer", self.pos, size=10, color=(255, 255, 255))
+		self.player_name = player_name
+		self.name_text = Text(self.player_name, "gamer", self.pos, size=10, color=(255, 255, 255))
 		self.text_offset = (4, -12)
+		self.initialized = False
+
+		if self.client_id == "solo":
+			self.set_action("idle")
+
+
+	def initialize_client(self, nickname, client_id):
+		self.player_name = nickname
+		self.client_id = client_id
+		self.initialized = True
+		self.set_action("idle")
+
+
+	def unregister_client(self, client_index):
+		self.player_name = f"player_{client_index + 1}"
+		self.client_id = ""
+		self.initialized = False
+
+
+	def render_name_tag(self, surface, offset=(0, 0)):
+		self.name_text.render(surface, offset=offset)
 
 
 	def update(self, tilemap, movement=(0, 0)):

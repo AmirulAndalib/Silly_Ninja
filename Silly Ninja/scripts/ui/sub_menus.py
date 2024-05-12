@@ -3,9 +3,11 @@ import socket
 import sys
 import re
 
-from game import GameForHost, GameForClient
+from scripts.game import GameForHost, GameForClient
 from scripts.utils import load_image
 from scripts.ui.ui_elements import Text, Button, InputField
+from scripts.socket.server import GameServer
+from scripts.socket.client import MAX_CLIENT_COUNT
 
 
 WHITE = (255, 255, 255)
@@ -70,6 +72,9 @@ class HostMenu(MenuBase):
 		self.default_ip = socket.gethostbyname(socket.gethostname())
 		self.default_port = 5050
 
+		self.game = None
+		self.server = None
+
 		# UI elements.
 		self.title = Text("HOST GAME", "retro gaming", (CENTER, 30), size=70, bold=True)
 		self.sub_title = Text("----- Local Area Network (LAN) Only -----", "retro gaming", (CENTER, 110), size=16)
@@ -82,7 +87,7 @@ class HostMenu(MenuBase):
 
 		self.nickname_field = InputField("gamer", (CENTER, 300), (400, 50), placeholder_text="Choose a Nickname...")
 
-		self.error_text = Text("", "retro gaming", (CENTER, 360), size=13, color=pygame.Color("crimson"))
+		self.status_text = Text("", "retro gaming", (CENTER, 360), size=13, color=pygame.Color("crimson"))
 
 		self.back_button = Button("Back", "gamer", (220, 390), (150, 60), on_click=self.back_out)
 		self.start_button = Button("Start", "gamer", (420, 390), (150, 60), on_click=self.start_hosting)
@@ -117,7 +122,7 @@ class HostMenu(MenuBase):
 			self.nickname_field.render(MenuBase.screen)
 
 			# Render the error text.
-			self.error_text.render(MenuBase.screen)
+			self.status_text.render(MenuBase.screen)
 
 			# Render the start button.
 			self.fade_alpha = self.start_button.update(MenuBase.screen, self.fade_alpha, mx, my, self.click)
@@ -145,14 +150,20 @@ class HostMenu(MenuBase):
 		nickname = self.nickname_field.get_submitted_text()
 
 		if re.match(IP_REGEX, ip) and re.match(PORT_REGEX, port):
-			self.error_text.set_text("")
+			self.status_text.set_text("")
 			try:
 				print(ip, int(port), nickname)
-				GameForHost(MenuBase.clock, MenuBase.screen, MenuBase.outline_display, MenuBase.normal_display, ip, int(port), nickname).run()
+				self.server = GameServer(ip, port)
+				self.game = GameForHost(MenuBase.clock, MenuBase.screen, MenuBase.outline_display, MenuBase.normal_display,
+										self.server, ip, int(port), nickname)
+				lobby = Lobby(self.server, self.game, is_host=True)
+
+				self.game.start_server(self.status_text, on_server_started=lobby.run)
+
 			except Exception:
-				print("IP or port was invalid! Try again.")
+				self.status_text.set_text("IP or port was invalid! Try again.")
 		else:
-			self.error_text.set_text("Incorrect IPv4 format or Port was not a number, or is less than 1000")
+			self.status_text.set_text("Incorrect IPv4 format or Port was not a number, or is less than 1000")
 
 
 	def handle_events(self, event):
@@ -167,7 +178,7 @@ class HostMenu(MenuBase):
 		super().back_out()
 		self.server_ip_field.clear_text()
 		self.port_field.clear_text()
-		self.error_text.set_text("")
+		self.status_text.set_text("")
 
 
 class JoinMenu(MenuBase):
@@ -187,7 +198,7 @@ class JoinMenu(MenuBase):
 
 		self.nickname_field = InputField("gamer", (CENTER, 300), (400, 50), placeholder_text="Choose a Nickname...")
 
-		self.error_text = Text("", "retro gaming", (CENTER, 360), size=13, color=pygame.Color("crimson"))
+		self.status_text = Text("", "retro gaming", (CENTER, 360), size=13, color=pygame.Color("crimson"))
 
 		self.back_button = Button("Back", "gamer", (220, 390), (150, 60), on_click=self.back_out)
 		self.join_button = Button("Join", "gamer", (420, 390), (150, 60), on_click=self.try_joining)
@@ -221,7 +232,7 @@ class JoinMenu(MenuBase):
 			self.nickname_field.render(MenuBase.screen)
 
 			# Render the error text.
-			self.error_text.render(MenuBase.screen)
+			self.status_text.render(MenuBase.screen)
 
 			# Render the start button.
 			self.fade_alpha = self.join_button.update(MenuBase.screen, self.fade_alpha, mx, my, self.click)
@@ -249,14 +260,16 @@ class JoinMenu(MenuBase):
 		nickname = self.nickname_field.get_submitted_text()
 
 		if re.match(IP_REGEX, ip) and re.match(PORT_REGEX, port):
-			self.error_text.set_text("")
+			self.status_text.set_text("")
 			try:
 				print(ip, int(port), nickname)
-				GameForClient(MenuBase.clock, MenuBase.screen, MenuBase.outline_display, MenuBase.normal_display, ip, int(port), nickname).run()
+				GameForClient(MenuBase.clock, MenuBase.screen, MenuBase.outline_display, MenuBase.normal_display,
+							ip, int(port), nickname)
+
 			except Exception:
-				print("IP or port was invalid! Try again.")
+				self.status_text.set_text("IP or port was invalid! Try again.")
 		else:
-			self.error_text.set_text("Incorrect IPv4 format or Port was not a number, or is less than 1000")
+			self.status_text.set_text("Incorrect IPv4 format or Port was not a number, or is less than 1000")
 
 
 	def handle_events(self, event):
@@ -271,4 +284,73 @@ class JoinMenu(MenuBase):
 		super().back_out()
 		self.server_ip_field.clear_text()
 		self.port_field.clear_text()
-		self.error_text.set_text("")
+		self.status_text.set_text("")
+
+
+class Lobby(MenuBase):
+	connected_game_clients = []
+
+	def __init__(self, server, game_instance, is_host=False):
+		super().__init__()
+		self.server = server
+		self.game_instance = game_instance
+		self.is_host = is_host
+
+		Lobby.connected_game_clients.append(self.game_instance)
+
+		# UI Elements.
+		self.title = Text("LOBBY", "retro gaming", (CENTER, 30), size=70, bold=True)
+		self.sub_title = Text("----- Current Players: 1/4 -----", "retro gaming", (CENTER, 110), size=16)
+
+		self.player_names = [
+			Text("Empty Slot", "retro gaming", (CENTER, 130), size=20, bold=True),
+			Text("Empty Slot", "retro gaming", (CENTER, 190), size=20, bold=True),
+			Text("Empty Slot", "retro gaming", (CENTER, 250), size=20, bold=True),
+			Text("Empty Slot", "retro gaming", (CENTER, 310), size=20, bold=True)
+		]
+
+		self.player_status = [
+			Text("---Disconnected---", "retro gaming", (CENTER, 160), size=15, bold=True),
+			Text("---Disconnected---", "retro gaming", (CENTER, 210), size=15, bold=True),
+			Text("---Disconnected---", "retro gaming", (CENTER, 280), size=15, bold=True),
+			Text("---Disconnected---", "retro gaming", (CENTER, 340), size=15, bold=True)
+		]
+
+		if self.is_host:
+			self.back_button = Button("Back", "gamer", (220, 390), (150, 60), on_click=self.back_out)
+			self.launch_button = Button("Launch", "gamer", (420, 390), (150, 60), on_click=None)
+		else:
+			self.back_button = Button("Back", "gamer", (CENTER, 390), (150, 60), on_click=self.back_out)
+
+
+	def run(self):
+		self.running = True
+
+		while self.running:
+			MenuBase.screen.blit(self.background, (0, 0))
+
+			mx, my = pygame.mouse.get_pos()
+
+			# Render title.
+			self.title.render(MenuBase.screen)
+			self.sub_title.set_text(f"----- Current Players: {len(Lobby.connected_game_clients)}/{MAX_CLIENT_COUNT} -----")
+			self.sub_title.render(MenuBase.screen)
+
+			# Render the launch button, only for the host lobby.
+			if self.is_host:
+				self.fade_alpha = self.launch_button.update(MenuBase.screen, self.fade_alpha, mx, my, self.click)
+				self.launch_button.render(MenuBase.screen)
+
+			# Render the back button.
+			self.fade_alpha = self.back_button.update(MenuBase.screen, self.fade_alpha, mx, my, self.click)
+			self.back_button.render(MenuBase.screen)
+
+
+	def back_out(self):
+		super().back_out()
+		if self.is_host:
+			self.server.shutdown()
+			Lobby.connected_game_clients.clear()
+		else:
+			self.game_instance.disconnect_from_server()
+			Lobby.connected_game_clients.remove(self.game_instance)

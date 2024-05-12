@@ -3,6 +3,7 @@ import pygame
 from scripts.utils import fade_out
 
 
+pygame.init()
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 TAN2 = pygame.Color("tan2")
