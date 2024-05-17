@@ -577,7 +577,7 @@ class GameForClient(MultiplayerGameBase):
 class GameSolo(GameBase):
 	def __init__(self, clock, screen, outline_display, normal_display):
 		super().__init__(clock, screen, outline_display, normal_display)
-		self.player = Player("You", self, (50, 50), (8, 15))
+		self.player = Player("", self, (50, 50), (8, 15))
 		self.start_game()
 
 
